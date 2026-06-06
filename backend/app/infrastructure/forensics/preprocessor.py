@@ -270,7 +270,7 @@ class DocumentPreprocessor:
                 poppler_path=(
                     r"C:\poppler\Library\bin"
                     if platform.system() == "Windows"
-                    else None
+                    else None 
                 )
             )
 

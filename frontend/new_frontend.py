@@ -1,6 +1,6 @@
 """
 Document Fraud Detection System — Streamlit Frontend
-Connects to the FastAPI backend at http://localhost:8000
+Connects to the FastAPI backend at https://trustdocsai.up.railway.app
 """
 
 import io
@@ -444,7 +444,7 @@ MODULE_LABELS = {
     "pdf_structure":"PDF Structure",
 }
 
-DEFAULT_API_URL = "http://localhost:8000"
+DEFAULT_API_URL = "https://trustdocsai.up.railway.app"
 
 
 # ─── PDF Report Builder ───────────────────────────────────────

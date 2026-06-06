@@ -39,10 +39,7 @@ from app.domain.entities.document import (
     ForensicContext,
     ImageProperties,
 )
-
-
-from pdf2image import convert_from_path
-import platform
+import fitz  # PyMuPDF
 
 logger = logging.getLogger("docfraud.preprocessor")
 
@@ -256,69 +253,82 @@ class DocumentPreprocessor:
     def _load_pdf(
         self, path: Path
     ) -> tuple[list[np.ndarray], Optional[ImageProperties]]:
-        """Rasterize PDF pages using pdf2image."""
+        """
+        Rasterize PDF pages using PyMuPDF.
+        No Poppler dependency.
+        """
         try:
-            from pdf2image import convert_from_path
-            from pdf2image.exceptions import PDFInfoNotInstalledError
-
-            pages = convert_from_path(
-                str(path),
-                dpi=150,
-                fmt="RGB",
-                thread_count=2,
-                use_pdftocairo=False,
-                poppler_path=(
-                    r"C:\poppler\Library\bin"
-                    if platform.system() == "Windows"
-                    else None 
+            doc = fitz.open(str(path))
+    
+            if len(doc) == 0:
+                raise PreprocessorError("PDF has no pages.")
+    
+            arrays = []
+    
+            # ~150 DPI rendering
+            zoom = 150 / 72.0
+            matrix = fitz.Matrix(zoom, zoom)
+    
+            first_props = None
+    
+            for page_idx in range(len(doc)):
+                page = doc.load_page(page_idx)
+    
+                pix = page.get_pixmap(
+                    matrix=matrix,
+                    alpha=False
                 )
-            )
-
-            if not pages:
-                raise PreprocessorError("PDF has no renderable pages.")
-
-            arrays = [np.array(p, dtype=np.uint8) for p in pages]
-            first = pages[0]
-            w, h = first.size
-
-            props = ImageProperties(
-                width=w,
-                height=h,
-                channels=3,
-                color_mode="RGB",
-                bit_depth=8,
-                dpi=150.0,
-                format="pdf",
-                has_alpha=False,
-            )
-
-            return arrays, props
-
-        except ImportError:
-            # pdf2image not available — try PIL
-            self.logger.warning(
-                "pdf2image not installed; attempting PIL fallback for PDF"
-            )
-            return self._load_pdf_pil_fallback(path)
-
-        except Exception as e:
-            raise PreprocessorError(f"PDF rasterization failed: {e}")
-
-    def _load_pdf_pil_fallback(
-        self, path: Path
-    ) -> tuple[list[np.ndarray], Optional[ImageProperties]]:
-        """PIL-based PDF loading (limited, for fallback only)."""
-        try:
-            with Image.open(path) as img:
-                arr = np.array(img.convert("RGB"), dtype=np.uint8)
-                h, w = arr.shape[:2]
-                props = ImageProperties(
-                    width=w, height=h, channels=3, color_mode="RGB",
-                    bit_depth=8, dpi=72.0, format="pdf", has_alpha=False,
+    
+                img = np.frombuffer(
+                    pix.samples,
+                    dtype=np.uint8
+                ).reshape(
+                    pix.height,
+                    pix.width,
+                    pix.n
                 )
-                return [arr], props
+    
+                if pix.n == 4:
+                    img = img[:, :, :3]
+    
+                arrays.append(img)
+    
+                if first_props is None:
+                    first_props = ImageProperties(
+                        width=pix.width,
+                        height=pix.height,
+                        channels=3,
+                        color_mode="RGB",
+                        bit_depth=8,
+                        dpi=150.0,
+                        format="pdf",
+                        has_alpha=False,
+                    )
+    
+            doc.close()
+    
+            return arrays, first_props
+    
         except Exception as e:
-            raise PreprocessorError(f"PDF PIL fallback failed: {e}")
+            raise PreprocessorError(
+                f"PDF rasterization failed: {e}"
+            )
+
+    # def _load_pdf_pil_fallback(
+    #     self, path: Path
+    # ) -> tuple[list[np.ndarray], Optional[ImageProperties]]:
+    #     """PIL-based PDF loading (limited, for fallback only)."""
+    #     try:
+    #         with Image.open(path) as img:
+    #             arr = np.array(img.convert("RGB"), dtype=np.uint8)
+    #             h, w = arr.shape[:2]
+    #             props = ImageProperties(
+    #                 width=w, height=h, channels=3, color_mode="RGB",
+    #                 bit_depth=8, dpi=72.0, format="pdf", has_alpha=False,
+    #             )
+    #             return [arr], props
+    #     except Exception as e:
+    #         raise PreprocessorError(f"PDF PIL fallback failed: {e}")
 
     def _classify_document_type(
         self,

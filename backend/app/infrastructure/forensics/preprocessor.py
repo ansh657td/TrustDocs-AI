@@ -40,6 +40,10 @@ from app.domain.entities.document import (
     ImageProperties,
 )
 
+
+from pdf2image import convert_from_path
+import platform
+
 logger = logging.getLogger("docfraud.preprocessor")
 
 # Magic bytes for format detection
@@ -263,7 +267,11 @@ class DocumentPreprocessor:
                 fmt="RGB",
                 thread_count=2,
                 use_pdftocairo=False,
-                poppler_path=r"C:\poppler\Library\bin"
+                poppler_path=(
+                    r"C:\poppler\Library\bin"
+                    if platform.system() == "Windows"
+                    else None
+                )
             )
 
             if not pages:

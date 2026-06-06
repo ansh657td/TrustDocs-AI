@@ -444,7 +444,7 @@ MODULE_LABELS = {
     "pdf_structure":"PDF Structure",
 }
 
-DEFAULT_API_URL = "https://trustdocsai.up.railway.app"
+DEFAULT_API_URL = "http://127.0.0.1:8000"
 
 
 # ─── PDF Report Builder ───────────────────────────────────────
